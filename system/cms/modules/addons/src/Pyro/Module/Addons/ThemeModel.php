@@ -20,6 +20,12 @@ class ThemeModel extends Eloquent
     protected $table = 'themes';
 
     /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
+
+    /**
      * The attributes that aren't mass assignable
      *
      * @var array
@@ -72,7 +78,39 @@ class ThemeModel extends Eloquent
     }
 
     /**
-     * Find All Modules
+     * Find many themes by type
+     *
+     * Return theme data for a specific theme
+     *
+     * @param   string  $slug  The name of the theme to load
+     * @return  ThemeModel
+     */
+    public function findManyByType($type)
+    {
+        return $this
+            ->with('options')
+            ->where('type', '=', $type)
+            ->get();
+    }
+
+    /**
+     * Find non-admin themes
+     *
+     * Return theme data for a specific theme
+     *
+     * @param   string  $slug  The name of the theme to load
+     * @return  ThemeModel
+     */
+    public function findGeneralThemes()
+    {
+        return $this
+            ->with('options')
+            ->where('type', '!=', 'admin')
+            ->get();
+    }
+
+    /**
+     * Find All Themes
      *
      * Return all known (installed) themes as ThemeModel objects 
      *

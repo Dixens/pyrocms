@@ -199,17 +199,35 @@
 
 /*
  * --------------------------------------------------------------------
+ * CHECK PHP VERSION
+ * --------------------------------------------------------------------
+ *
+ * We need 5.3.7 or higher
+ *
+ */
+ if (!defined('PHP_VERSION_ID')) {
+    $version = explode('.', PHP_VERSION);
+    define('PHP_VERSION_ID', ($version[0] * 10000 + $version[1] * 100 + $version[2]));
+}
+
+if( PHP_VERSION_ID < 50307 ){
+	echo "You need php 5.3.7 or higher to install PyroCMS. Please update your version and reload this page.<br>Your current version is: ".PHP_VERSION;
+	exit();
+}
+
+/*
+ * --------------------------------------------------------------------
  * LOAD THE COMPOSER AUTOLOADER
  * --------------------------------------------------------------------
  *
  * ...and it will take care of our classes
  *
  */
-if (!file_exists('../vendor/autoload.php')) {
+if (!file_exists('../system/vendor/autoload.php')) {
 	echo "It seems composer hasn't been installed yet. Please reload this page after running the following commands in a terminal:";
 	exit("<pre>cd ".realpath('..')."\nphp composer.phar install</pre>");
 }
-require_once '../vendor/autoload.php';
+require_once '../system/vendor/autoload.php';
 
 /*
  * --------------------------------------------------------------------

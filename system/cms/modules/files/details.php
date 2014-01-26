@@ -25,7 +25,7 @@ class Module_Files extends AbstractModule
 				'de' => 'Dateien',
 				'el' => 'Αρχεία',
 				'es' => 'Archivos',
-                            'fa' => 'فایل ها',
+				'fa' => 'فایل ها',
 				'fi' => 'Tiedostot',
 				'fr' => 'Fichiers',
 				'he' => 'קבצים',
@@ -51,7 +51,7 @@ class Module_Files extends AbstractModule
 				'de' => 'Verwalte Dateien und Verzeichnisse.',
 				'el' => 'Διαχειρίζεται αρχεία και φακέλους για το ιστότοπό σας.',
 				'es' => 'Administra archivos y carpetas en tu sitio.',
-                            'fa' => 'مدیریت فایل های چند رسانه ای و فولدر ها سایت',
+				'fa' => 'مدیریت فایل های چند رسانه ای و فولدر ها سایت',
 				'fi' => 'Hallitse sivustosi tiedostoja ja kansioita.',
 				'fr' => 'Gérer les fichiers et dossiers de votre site.',
 				'he' => 'ניהול תיקיות וקבצים שבאתר',
@@ -83,17 +83,17 @@ class Module_Files extends AbstractModule
 		$schema->dropIfExists('file_folders');
 
 		$schema->create('files', function($table) {
-			$table->increments('id');
+			$table->string('id', 255);
 			$table->integer('folder_id');
 			$table->integer('user_id');
 			$table->enum('type', array('a', 'v', 'd', 'i', 'o'));
-			$table->string('name', 100);
-			$table->string('filename', 255);
-			$table->string('path', 255);
+			$table->string('name');
+			$table->string('filename');
+			$table->string('path');
 			$table->text('description');
 			$table->string('extension', 10);
 			$table->string('mimetype', 100);
-			$table->string('keywords', 32)->nullable();
+			$table->string('keywords')->nullable();
 			$table->integer('width')->nullable();
 			$table->integer('height')->nullable();
 			$table->integer('filesize')->nullable();
@@ -108,13 +108,13 @@ class Module_Files extends AbstractModule
 		$schema->create('file_folders', function($table) {
 			$table->increments('id');
 			$table->integer('parent_id')->nullable();
-			$table->string('slug', 100);
-			$table->string('name', 100);
+			$table->string('slug');
+			$table->string('name');
 			$table->string('location', 20)->default('local');
 			$table->string('remote_container', 100)->nullable();
 			$table->integer('date_added');
 			$table->integer('sort')->default(0);
-			$table->integer('hidden', 1)->default(0);
+			$table->boolean('hidden')->default(0);
 		});
 
 		// Install the settings

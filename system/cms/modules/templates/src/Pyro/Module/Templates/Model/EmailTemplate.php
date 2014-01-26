@@ -1,12 +1,14 @@
 <?php namespace Pyro\Module\Templates\Model;
 
+use Pyro\Model\Eloquent;
+
 /**
  * Email Template model
  *
  * @author      PyroCMS Dev Team
  * @package     PyroCMS\Core\Modules\Templates\Models
  */
-class EmailTemplate extends \Illuminate\Database\Eloquent\Model
+class EmailTemplate extends Eloquent
 {
     /**
      * Define the table name
@@ -14,6 +16,12 @@ class EmailTemplate extends \Illuminate\Database\Eloquent\Model
      * @var string
      */
     protected $table = 'email_templates';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable

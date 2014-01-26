@@ -244,8 +244,8 @@ class Plugin_Pages extends Plugin
 	 */
 	public function url()
 	{
-		$id		= $this->attribute('id');
-		$page	= $this->cache->method('page_m', 'get', array($id));
+		$id = $this->attribute('id');
+		$page = Page::find($id);
 
 		return site_url($page ? $page->uri : '');
 	}

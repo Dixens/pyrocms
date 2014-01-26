@@ -1,6 +1,7 @@
 <?php
 
 use Pyro\Module\Pages\Model\Page;
+use Pyro\Module\Keywords\Model\Applied as AppliedKeywords;
 
 /**
  * The public controller for the Pages module.
@@ -52,7 +53,6 @@ class Pages extends Public_Controller
 					set_status_header(404);
 				}
 
-				exit;
 			}
 
 			$url_segments = $this->uri->total_segments() > 0 ? $this->uri->segment_array() : null;
@@ -76,7 +76,7 @@ class Pages extends Public_Controller
 		// make updates to the page type files and see the
 		// results immediately.
 		if (ENVIRONMENT === PYRO_DEVELOPMENT) {
-			$this->cache->clear('Page');
+			$this->cache->forget('Page');
 		}
 
 		// GET THE PAGE ALREADY. In the event of this being the home page $url_segments will be null
@@ -84,7 +84,7 @@ class Pages extends Public_Controller
 		$page = Page::findByUri($url_segments, true);
 
 		// If page is missing or not live (and the user does not have permission) show 404
-		if ( ! $page or ($page->status === 'draft' and ! $this->permission_m->has_role(array('put_live', 'edit_live')))) {
+		if ( ! $page or ($page->status === 'draft' and ! ci()->current_user->hasAccess(array('put_live', 'edit_live')))) {
 			// Load the '404' page. If the actual 404 page is missing (oh the irony) bitch and quit to prevent an infinite loop.
 			// if ( ! ($page = $this->cache->method('page_m', 'get_by_uri', array('404'))))
 			if ( ! ($page = Page::findByUri(404))) {
@@ -107,12 +107,21 @@ class Pages extends Public_Controller
 
 		// Nope, it is a page, but do they have access?
 		elseif ($page->restricted_to) {
+
+			// My favorite.. EXPLODE
 			$page->restricted_to = (array) explode(',', $page->restricted_to);
 
+			// Grab user group IDs
+			$user_groups = isset($this->current_user->id) ? $this->current_user->groups->lists('id') : array();
+
+			// Get the similarities between groups / restriced group IDs
+			$matches = array_intersect($page->restricted_to, $user_groups);
+
 			// Are they logged in and an admin or a member of the correct group?
-			if ( ! $this->current_user or (isset($this->current_user->group) and $this->current_user->group != 'admin' and ! in_array($this->current_user->group_id, $page->restricted_to))) {
+			if ( ! $user_groups or (! in_array(1, $user_groups) and empty($matches))) {
 				// send them to login but bring them back when they're done
-				redirect('users/login/'.(empty($url_segments) ? '' : implode('/', $url_segments)));
+				$this->session->set_userdata('redirect_to', $redirect_to = implode('/', $url_segments));
+				redirect('users/login');
 			}
 		}
 
@@ -158,6 +167,9 @@ class Pages extends Public_Controller
 		// Metadata
 		// ---------------------------------
 
+		$page->meta_title = $this->parser->parse_string($page->meta_title, array('current_user' => ci()->current_user), true);
+		$page->meta_description = $this->parser->parse_string($page->meta_description, array('current_user' => ci()->current_user), true);
+
 		// First we need to figure out our metadata. If we have meta for our page,
 		// that overrides the meta from the page layout.
 		$meta_title = ($page->meta_title ?: $page->type->meta_title);
@@ -167,8 +179,9 @@ class Pages extends Public_Controller
 		$keyword_hash = $page->meta_keywords ?: $page->type->meta_keywords;
 
 		if ($keyword_hash) {
-			$meta_keywords = Keywords::get_string($page->meta_keywords);
-		}
+            $meta_keywords = implode(', ', AppliedKeywords::getNamesByHash($page->meta_keywords)->lists('name'));
+            $page->meta_keywords = $meta_keywords;
+        }
 
 		$meta_robots = $page->meta_robots_no_index ? 'noindex' : 'index';
 		$meta_robots .= $page->meta_robots_no_follow ? ',nofollow' : ',follow';
@@ -222,8 +235,8 @@ class Pages extends Public_Controller
 		}
 
 		// Get our stream.
-		$this->load->driver('Streams');
-		$stream = $this->streams_m->get_stream($page->type->stream_id);
+		//$this->load->driver('Streams');
+		//$stream = $this->streams_m->get_stream($page->type->stream_id);
 
 		// We are going to pre-build this data so we have the data
 		// available to the template plugin (since we are pre-parsing our views).
@@ -232,11 +245,16 @@ class Pages extends Public_Controller
 		// Parse our view file. The view file is nothing
 		// more than an echo of $page->layout->body and the
 		// comments after it (if the page has comments).
-		$html = $this->template->load_view('pages/page', array('page' => $page), false);
 
+		$attributes = $page->getAttributes();
+
+		$attributes = array_merge($attributes, ($page->entry and ! $_POST) ? $page->entry->getFormatter()->asPlugin()->getAttributes() : array());
+
+		$html = $this->template->load_view('pages/page', array_merge(array('page' => $page), $attributes), false);
+		
 		$view = $this->parser->parse_string($html, $page, true, false, array(
-			'stream' => $stream->stream_slug,
-			'namespace' => $stream->stream_namespace,
+			'stream' => $page->entry ? $page->entry->getStreamSlug() : null,
+			'namespace' => $page->entry ? $page->entry->getStreamNamespace() : null,
 			'id_name' => 'entry_id'
 		));
 

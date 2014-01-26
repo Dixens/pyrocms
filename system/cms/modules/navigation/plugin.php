@@ -153,16 +153,14 @@ class Plugin_Navigation extends Plugin
 	 */
 	public function links()
 	{
-		$group         = $this->attribute('group');
-		$group_segment = $this->attribute('group_segment');
-
-		is_numeric($group_segment) and $group = $this->uri->segment($group_segment);
-
+		// What are we after?
+		$group = $this->attribute('group');
+		
 		// TODO Cache me please
 		$links = Navigation\Model\Link::getTreeByGroup($group, array(
 
 			// TODO Rethink group logic for sentry
-			'user_group' => ($this->current_user and isset($this->current_user->group)) ? $this->current_user->group : false,
+			'user_groups' => isset($this->current_user->id) ? $this->current_user->groups->lists('id') : false,
 			'front_end'  => true,
 			'is_secure'  => IS_SECURE,
 		));
@@ -228,9 +226,11 @@ class Plugin_Navigation extends Plugin
 			$wrapper = array();
 
 			// attributes of anchor
-			$item['url']   = $link->url;
+			$item['url']   = ci()->parser->parse_string($link->url, null, true);
+			$item['uri']   = ci()->parser->parse_string($link->uri, null, true);
 			$item['title'] = $link->title;
 			$item['total'] = $total;
+			$item['page_id'] = $link['page_id'];
 
 			if ($wrap) {
 				$item['title'] = '<'.$wrap.'>'.$item['title'].'</'.$wrap.'>';

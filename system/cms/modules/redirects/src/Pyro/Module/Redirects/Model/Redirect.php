@@ -1,12 +1,14 @@
 <?php namespace Pyro\Module\Redirects\Model;
 
+use Pyro\Model\Eloquent;
+
 /**
  * Redirect model
  *
  * @author      PyroCMS Dev Team
  * @package     PyroCMS\Core\Modules\Redirects\Models
  */
-class Redirect extends \Illuminate\Database\Eloquent\Model
+class Redirect extends Eloquent
 {
     /**
      * Define the table name
@@ -14,6 +16,12 @@ class Redirect extends \Illuminate\Database\Eloquent\Model
      * @var string
      */
     protected $table = 'redirects';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable

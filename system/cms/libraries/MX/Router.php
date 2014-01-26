@@ -3,6 +3,8 @@
 /* load the MX core module class */
 require dirname(__FILE__).'/Modules.php';
 
+use Illuminate\Database\Capsule\Manager as Capsule;
+
 /**
  * Modular Extensions - HMVC
  *
@@ -72,19 +74,19 @@ class MX_Router extends CI_Router
 		 */
 		if ($path = self::is_multisite() and ! defined('SITE_REF'))
 		{
-			require_once BASEPATH.'database/DB.php';
+			$DB = self::connect();
 
-			$site = DB()
-				->select('site.name, site.ref, site.domain, site.active, alias.domain as alias_domain, alias.type as alias_type')
-				->where('site.domain', SITE_DOMAIN)
-				->or_where('alias.domain', SITE_DOMAIN)
-				->join('core_domains alias', 'alias.site_id = site.id', 'left')
-				->get('core_sites site')
-				->row();
+			$site = $DB
+				->table('core_sites')
+				->select('core_sites.name', 'core_sites.ref', 'core_sites.domain', 'core_sites.is_activated', 'core_domains.domain as alias_domain', 'core_domains.type as alias_type')
+				->where('core_sites.domain', '=', SITE_DOMAIN)
+				->orWhere('core_domains.domain', '=', SITE_DOMAIN)
+				->leftJoin('core_domains', 'core_domains.site_id', '=', 'core_sites.id')
+				->first();				
 
 			// If the site is disabled we set the message in a constant for MY_Controller to display
-			if (isset($site->active) and ! $site->active) {
-				$status = DB()->where('slug', 'status_message')
+			if (isset($site->is_activated) and ! $site->is_activated) {
+				$status = $DB->where('slug', 'status_message')
 					->get('core_settings')
 					->row();
 
@@ -243,5 +245,53 @@ class MX_Router extends CI_Router
 		}
 
 		Modules::$locations = $locations;
+	}
+
+	private function connect() {
+
+		require APPPATH.'config/database.php';
+        
+        // Use whatever the config tells us to use, it will probably be environment
+        $config = $db[$active_group];
+
+        // Is this a PDO connection?
+        if ($config) {
+
+            preg_match('/(mysql|pgsql|sqlite)+:host=(\w.+).+dbname=(\w+)/', $config['dsn'], $matches);
+            //print_r($matches);die;
+            $config['dbdriver'] = $matches[1];
+            $config['hostname'] = $matches[2];
+            $config['database'] = $matches[3];
+
+            unset($matches);
+        }
+
+        $capsule = new Capsule;
+
+        $capsule->addConnection(array(
+            'driver' => $config['dbdriver'],
+            'host' => $config["hostname"],
+            'database' => $config["database"],
+            'username' => $config["username"],
+            'password' => $config["password"],
+            'charset' => $config["char_set"],
+            'collation' => $config["dbcollat"],
+        ));
+
+        // Set the fetch mode FETCH_CLASS so we 
+        // get objects back by default.
+        $capsule->setFetchMode(PDO::FETCH_CLASS);
+
+        // Setup the Eloquent ORM
+        $capsule->bootEloquent();
+
+        // Make this Capsule instance available globally via static methods... (optional)
+        $capsule->setAsGlobal();
+
+        $conn = $capsule->connection();
+
+        $conn->setFetchMode(PDO::FETCH_OBJ);
+
+        return $conn;
 	}
 }

@@ -1,13 +1,13 @@
 <?php namespace Pyro\Module\Contact\Model;
 
-use Illuminate\Database\Eloquent\Model;
+use Pyro\Model\Eloquent;
 
 /**
  *
  * @author		PyroCMS Dev Team
  * @package		PyroCMS\Core\Modules\Contact\Models
  */
-class ContactLog extends Model
+class ContactLog extends Eloquent
 {
 	/**
 	 * Define the table name
@@ -15,6 +15,12 @@ class ContactLog extends Model
 	 * @var string
 	 */
 	protected $table = 'contact_log';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable

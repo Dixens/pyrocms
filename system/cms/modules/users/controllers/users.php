@@ -1,7 +1,11 @@
 <?php
 
+use Cartalyst\Sentry\Sentry;
 use Cartalyst\Sentry\Users\UserNotFoundException;
 use Pyro\Module\Users\Model;
+use Pyro\Module\Streams_core\EntryUi;
+
+use Pyro\Module\Streams_core\Data\UsersProfilesEntryModel;
 
 /**
  * User controller for the users module (frontend)
@@ -98,7 +102,7 @@ class Users extends Public_Controller
 			: $this->session->userdata('redirect_to');
 
 		// Any idea where we are heading after login?
-		if ( ! $_POST and $args = func_get_args()) {
+		if (! $_POST and $args = func_get_args()) {
 			$this->session->set_userdata('redirect_to', $redirect_to = implode('/', $args));
 		}
 
@@ -126,11 +130,12 @@ class Users extends Public_Controller
 			// Kill the session
 			$this->session->unset_userdata('redirect_to');
 
+			$user = Model\User::findByEmail($this->input->post('email'));
+
 			// trigger a post login event for third party devs
-			Events::trigger('post_user_login');
+			Events::trigger('post_user_login', $user->id);
 
 			if ($this->input->is_ajax_request()) {
-				$user = Model\User::findByEmail($user->email);
 
 				exit(json_encode(array(
 					'status' => true,
@@ -151,6 +156,8 @@ class Users extends Public_Controller
 			} else {
 				redirect($redirect_to ?: '');
 			}
+		} else {
+			$user = new stdClass();
 		}
 
 
@@ -193,19 +200,22 @@ class Users extends Public_Controller
 		}
 
 		/* show the disabled registration message */
-		if ( ! Settings::get('enable_registration')) {
+		if (! Settings::get('enable_registration')) {
 			$this->template
 				->title(lang('user:register_title'))
 				->build('disabled');
 			return;
 		}
 
+        // Start a user model
+        $userModel = new UsersProfilesEntryModel;
+
 		// Validation rules
 		$validation = array(
 			array(
 				'field' => 'password',
 				'label' => lang('global:password'),
-				'rules' => 'required|min_length['.$this->config->item('min_password_length', 'ion_auth').']|max_length['.$this->config->item('max_password_length', 'ion_auth').']'
+				'rules' => 'required|min_length[5]|max_length[20]'
 			),
 			array(
 				'field' => 'email',
@@ -230,7 +240,7 @@ class Users extends Public_Controller
 
 		// Get the profile fields validation array from streams
 		$this->load->driver('Streams');
-		$profile_validation = $this->streams->streams->validation_array('profiles', 'users');
+		$profile_validation = array();//$this->streams->streams->validation_array('profiles', 'users');
 
 		// Remove display_name
 		foreach ($profile_validation as $key => $values) {
@@ -245,7 +255,7 @@ class Users extends Public_Controller
 
 		// Get user profile data. This will be passed to our
 		// streams insert_entry data in the model.
-		$assignments = $this->streams->streams->get_assignments('profiles', 'users');
+		$assignments = $userModel->getAssignments();
 
 		// This is the required profile data we have from
 		// the register form
@@ -340,21 +350,32 @@ class Users extends Public_Controller
 
 				// Do we have a display name? If so, let's use that.
 				// Othwerise we can use the username.
-				if ( ! isset($profile_data['display_name']) or ! $profile_data['display_name']) {
+				if (! isset($profile_data['display_name']) or ! $profile_data['display_name']) {
 					$profile_data['display_name'] = $username;
 				}
 
 				// We are registering with a null group_id so we just
 				// use the default user ID in the settings.
-				$id = $this->ion_auth->register($username, $password, $email, null, $profile_data);
+				$user = Model\User::create(
+					array(
+						'username' => $username,
+						'password' => $password,
+						'email' => $email,
+						)
+					);
+				
+				$id = $user->id;
 
 				// Try to create the user
 				if ($id > 0) {
-					// Convert the array to an object
-					$user->username = $username;
-					$user->display_name = $username;
-					$user->email = $email;
-					$user->password = $password;
+
+					// Make a profile
+					$profile_data['user_id'] = $id;
+					Model\Profile::create($profile_data);
+
+
+					// Assign to users
+					Model\User::assignGroupIdsToUser($user, array(2));
 
 					// trigger an event for third party devs
 					Events::trigger('post_user_register', $id);
@@ -375,19 +396,21 @@ class Users extends Public_Controller
 
 					// show the "you need to activate" page while they wait for their email
 					if ((int) Settings::get('activation_email') === 1) {
-						$this->session->set_flashdata('notice', $this->ion_auth->messages());
+						Events::trigger('send_activation_email', $user);
+						$this->session->set_flashdata('notice', lang('user:activation_code_sent_notice'));
 						redirect('users/activate');
 
 					// activate instantly
 					} elseif ((int) Settings::get('activation_email') === 2) {
-						$this->ion_auth->activate($id, false);
+						$user->activateUser();
 
-						$this->ion_auth->login($this->input->post('email'), $this->input->post('password'));
+						$user = $this->sentry->findUserById($user->id);
+						$this->sentry->login($user, false);
+
+						$this->session->set_flashdata('success', lang('user:logged_in'));
 						redirect($this->config->item('register_redirect', 'ion_auth'));
 					
 					} else {
-						$this->ion_auth->deactivate($id);
-
 						/* show that admin needs to activate your account */
 						$this->session->set_flashdata('notice', lang('user:activation_by_admin_notice'));
 						redirect('users/register'); /* bump it to show the flash data */
@@ -396,6 +419,7 @@ class Users extends Public_Controller
 
 				// Can't create the user, show why
 				} else {
+					// TODO: What's the Sentry equivalent here?
 					$this->template->error_string = $this->ion_auth->errors();
 				}
 			} else {
@@ -418,7 +442,7 @@ class Users extends Public_Controller
 
 		// Anything in the post?
 
-		$this->template->set('profile_fields', $this->streams->fields->get_stream_fields('profiles', 'users', $profile_data));
+		$this->template->set('profile_fields', $assignments);
 
 		$this->template
 			->title(lang('user:register_title'))
@@ -438,7 +462,7 @@ class Users extends Public_Controller
 	{
 		// Get info from email
 		if ($this->input->post('email')) {
-			$this->template->activate_user = $this->ion_auth->get_user_by_email($this->input->post('email'));
+			$this->template->activate_user = Model\User::findByEmail($this->input->post('email'));
 			$id = $this->template->activate_user->id;
 		}
 
@@ -446,16 +470,20 @@ class Users extends Public_Controller
 
 		// If user has supplied both bits of information
 		if ($id and $code) {
+
+			// Get the User
+			$user = Model\User::find($id);
+
 			// Try to activate this user
-			if ($this->ion_auth->activate($id, $code)) {
-				$this->session->set_flashdata('activated_email', $this->ion_auth->messages());
+			if ($user->attemptActivation($code)) {
+				$this->session->set_flashdata('activated_email', lang('user:activated_message'));
 
 				// trigger an event for third party devs
 				Events::trigger('post_user_activation', $id);
 
 				redirect('users/activated');
 			} else {
-				$this->template->error_string = $this->ion_auth->errors();
+				$this->template->error_string = lang('user:activation_incorrect');
 			}
 		}
 
@@ -507,14 +535,14 @@ class Users extends Public_Controller
 			$uname = (string) $this->input->post('user_name');
 			$email = (string) $this->input->post('email');
 
-			if ( ! ($uname or $email)) {
+			if (! ($uname or $email)) {
 				// they submitted with an empty form, abort
 				$this->template->set('error_string', $this->ion_auth->errors())
 					->build('reset_pass');
 			}
 
-			if ( ! ($user_meta = $this->ion_auth->get_user_by_email($email))) {
-				$user_meta = $this->ion_auth->get_user_by_username($email);
+			if (! ($user_meta = Model\User::findByEmail($email))) {
+				$user_meta = Model\User::findByUsername($email);
 			}
 
 			// have we found a user?
@@ -579,8 +607,9 @@ class Users extends Public_Controller
 	 */
 	public function edit($id = 0)
 	{
-		if ($this->current_user and $this->current_user->group === 'admin' and $id > 0) {
-			$user = $this->user_m->get(array('id' => $id));
+		if ($this->current_user->isSuperUser() and $id > 0)
+		{
+			$user = Model\User::find($id);
 
 			// invalide user? Show them their own profile
 			$user or redirect('edit-profile');
@@ -592,8 +621,6 @@ class Users extends Public_Controller
 		$profile_data = array(); // For our form
 
 		// Get the profile data
-		$profile_row = $this->db->limit(1)
-			->where('user_id', $user->id)->get('profiles')->row();
 
 		// If we have API's enabled, load stuff
 		if (Settings::get('api_enabled') and Settings::get('api_user_keys')) {
@@ -611,7 +638,7 @@ class Users extends Public_Controller
 			),
 			array(
 				'field' => 'display_name',
-				'label' => lang('profile_display_name'),
+				'label' => lang('user:profile_display_name'),
 				'rules' => 'required|xss_clean'
 			)
 		);
@@ -620,16 +647,12 @@ class Users extends Public_Controller
 		// Merge streams and users validation
 		// --------------------------------
 
+		// @todo - fix validation
 		// Get the profile fields validation array from streams
-		$this->load->driver('Streams');
-		$profile_validation = $this->streams->streams->validation_array('profiles', 'users', 'edit', array(), $profile_row->id);
+		//$profile_validation = $this->streams->streams->validation_array('profiles', 'users', 'edit', array(), $profile_row->id);
 
 		// Set the validation rules
-		$this->form_validation->set_rules(array_merge($this->validation_rules, $profile_validation));
-
-		// Get user profile data. This will be passed to our
-		// streams insert_entry data in the model.
-		$assignments = $this->streams->streams->get_assignments('profiles', 'users');
+		//$this->form_validation->set_rules(array_merge($this->validation_rules, $profile_validation));
 
 		// --------------------------------
 
@@ -677,7 +700,7 @@ class Users extends Public_Controller
 			$profile_data = $secure_post;
 
 			if ($this->ion_auth->update_user($user->id, $user_data, $profile_data) !== false) {
-				Events::trigger('post_user_update');
+				Events::trigger('post_user_update', $id);
 				$this->session->set_flashdata('success', $this->ion_auth->messages());
 			
 			} else {
@@ -698,35 +721,14 @@ class Users extends Public_Controller
 			}
 		}
 
-		// --------------------------------
-		// Grab user profile data
-		// --------------------------------
-
-		foreach ($assignments as $assign) {
-			if (isset($_POST[$assign->field_slug])) {
-				$profile_data[$assign->field_slug] = $this->input->post($assign->field_slug);
-			
-			} else {
-				$profile_data[$assign->field_slug] = $profile_row->{$assign->field_slug};
-			}
-		}
-
-		// --------------------------------
-		// Run Stream Events
-		// --------------------------------
-
-		$profile_stream_id = $this->streams_m->get_stream_id_from_slug('profiles', 'users');
-		$this->fields->run_field_events($this->streams_m->get_stream_fields($profile_stream_id), array());
-
-		// --------------------------------
-
-		// Render the view
-		$this->template->build('profile/edit', array(
-			'_user' => $user,
-			'display_name' => $profile_row->display_name,
-			'profile_fields' => $this->streams->fields->get_stream_fields('profiles', 'users', $profile_data),
-			'api_key' => isset($api_key) ? $api_key : null,
-		));
+        EntryUi::form($user->profile) // We can pass the profile model to generate the form
+        	->title('Edit Profile')
+            ->viewWrapper('users/profile/edit', array('_user' => $user))
+            ->messages(array(
+            	'success' => 'Profile updated.'
+            )) // @todo - language
+            ->redirects('admin/users')
+            ->render();
 	}
 
 	/**
@@ -740,38 +742,48 @@ class Users extends Public_Controller
 	{
 		$password = $this->input->post('password');
 
-		try {
 
-			$this->sentry->authenticate(array(
-				'email' => $email,
-				'password' => $password,
-			), (bool) $this->input->post('remember'));
+		if ((Events::trigger('authenticate_user', array('email' => $email, 'password' => $password))) == true and ($user = Model\User::findByEmail($email)) !== null) {
 
-		} catch (UserNotFoundException $e) {
+            $user = $this->sentry->findUserById($user->id);
 
-			// Could not log in with password. Maybe its an old style pass?
-			try {
-				// Try logging in with this double-hashed password
+            $this->sentry->login($user, false);
+
+        } else {
+
+        	try {
+
 				$this->sentry->authenticate(array(
 					'email' => $email,
-					'password' => whacky_old_password_hasher($email, $password),
+					'password' => $password,
 				), (bool) $this->input->post('remember'));
 
 			} catch (UserNotFoundException $e) {
 
-				// That madness didn't work, error
-				$this->form_validation->set_message('_check_login', 'Incorrect login.');
+				// Could not log in with password. Maybe its an old style pass?
+				try {
+					// Try logging in with this double-hashed password
+					$this->sentry->authenticate(array(
+						'email' => $email,
+						'password' => whacky_old_password_hasher($email, $password),
+					), (bool) $this->input->post('remember'));
+
+				} catch (UserNotFoundException $e) {
+
+					// That madness didn't work, error
+					$this->form_validation->set_message('_check_login', 'Incorrect login.');
+					return false;
+				}
+
+			} catch (Exception $e) {
+
+				Events::trigger('login_failed', $email);
+				error_log('Login failed for user '.$email);
+
+				$this->form_validation->set_message('_check_login', $e->getMessage());
 				return false;
 			}
-
-		} catch (Exception $e) {
-
-			Events::trigger('login_failed', $email);
-			error_log('Login failed for user '.$email);
-
-			$this->form_validation->set_message('_check_login', $e->getMessage());
-			return false;
-		}
+        }
 
 		return true;
 	}
@@ -785,7 +797,7 @@ class Users extends Public_Controller
 	 */
 	public function _username_check($username)
 	{
-		if ($this->ion_auth->username_check($username)) {
+		if (Model\User::findByUsername($username)) {
 			$this->form_validation->set_message('_username_check', lang('user:error_username'));
 			return false;
 		}
@@ -802,7 +814,7 @@ class Users extends Public_Controller
 	 */
 	public function _email_check($email)
 	{
-		if ($this->ion_auth->email_check($email)) {
+		if (Model\User::findByEmail($email)) {
 			$this->form_validation->set_message('_email_check', lang('user:error_email'));
 			return false;
 		}

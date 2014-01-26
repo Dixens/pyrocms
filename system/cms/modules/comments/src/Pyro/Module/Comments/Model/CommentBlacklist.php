@@ -1,12 +1,14 @@
 <?php namespace Pyro\Module\Comments\Model;
 
+use Pyro\Model\Eloquent;
+
 /**
  * Comment Blacklist model
  *
  * @author      PyroCMS Dev Team
  * @package     PyroCMS\Core\Modules\Comments\Models
  */
-class CommentBlacklist extends \Illuminate\Database\Eloquent\Model
+class CommentBlacklist extends Eloquent
 {
     /**
      * Define the table name
@@ -14,6 +16,12 @@ class CommentBlacklist extends \Illuminate\Database\Eloquent\Model
      * @var string
      */
     protected $table = 'comment_blacklists';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable

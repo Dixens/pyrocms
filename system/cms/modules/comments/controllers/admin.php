@@ -95,11 +95,12 @@ class Admin extends Admin_Controller
 			? lang('comments:active_title')
 			: lang('comments:inactive_title');
 
-		$this->input->is_ajax_request() && $this->template->set_layout(false);
+		if ($this->input->is_ajax_request()) {
+			$this->template->set_layout(false);
+		}
 
 		$this->template
 			->title($this->module_details['name'])
-			->append_js('admin/filter.js')
 			->set('module_list', Comment::getModuleSlugs())
 			->set('content_title', $content_title)
 			->set('comments', $this->comments->process($comments))
@@ -226,7 +227,7 @@ class Admin extends Admin_Controller
 				$comment->delete();
 
 				// Wipe cache for this model, the content has changed
-				$this->cache->clear('Comment');
+				$this->cache->forget('Comment');
 				$comments[] = $comment;
 			}
 		}

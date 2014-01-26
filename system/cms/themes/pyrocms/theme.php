@@ -10,7 +10,7 @@ class Theme_Pyrocms extends AbstractTheme
     public $author_website	= 'http://pyrocms.com/';
     public $website			= 'http://pyrocms.com/';
     public $description		= 'PyroCMS admin theme. HTML5 and CSS3 styling.';
-    public $version			= '1.0.0';
+    public $version			= '2.0.0';
 	public $type			= 'admin';
 	public $options 		= array(
 		'pyrocms_recent_comments' => array(
@@ -62,7 +62,7 @@ class Theme_Pyrocms extends AbstractTheme
 		// only load these items on the dashboard
 		if ($this->module && $this->method !== 'login' && $this->method !== 'help') {
 			// don't bother fetching the data if it's turned off in the theme
-			if (( ! $opt = $this->theme->getOptionValues())) {
+			if (( ! $opt = $this->theme->model->getOptionValues())) {
 
 				if (isset($opt->pyrocms_analytics_graph) and $opt->pyrocms_analytics_graph == 'yes')	{ 
 					self::getAnalytics();
@@ -175,7 +175,7 @@ class Theme_Pyrocms extends AbstractTheme
 				$data['analytic_views'] = $flot_data_views;
 
 				// Call the model or library with the method provided and the same arguments
-				$this->cache->set('analytics', array('analytic_visits' => $flot_data_visits, 'analytic_views' => $flot_data_views), 60 * 60 * 6); // 6 hours
+				$this->cache->put('analytics', array('analytic_visits' => $flot_data_visits, 'analytic_views' => $flot_data_views), 60 * 60 * 6); // 6 hours
 			} catch (Exception $e) {
 				$data['messages']['notice'] = sprintf(lang('cp_google_analytics_no_connect'), anchor('admin/settings', lang('cp_nav_settings')));
 			}

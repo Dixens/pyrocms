@@ -29,6 +29,7 @@ class Admin_themes extends Admin_Controller
 	{
 		parent::__construct();
 	
+		$this->themeManager->registerUnavailableThemes();
 		$this->themes = $this->themeManager->getModel();
 
 		$this->lang->load('addons');
@@ -42,13 +43,11 @@ class Admin_themes extends Admin_Controller
 	 */
 	public function index()
 	{
-		$themes = $this->themes->findAll();
+		$themes = $this->themes->findGeneralThemes();
 
 		foreach ($themes as &$theme) {
-			if (( ! isset($theme->type)) or $theme->type !== 'admin') {
-				if ($theme->slug == Settings::get('default_theme')) {
-					$theme->is_default = true;
-				}
+			if ($theme->slug == Settings::get('default_theme')) {
+				$theme->is_default = true;
 			}
 		}
 
@@ -82,7 +81,7 @@ class Admin_themes extends Admin_Controller
 			// Success...
 			$this->session->set_flashdata('success', lang('addons:themes:re-index_success'));
 
-			$this->cache->clear('theme_m');
+			$this->cache->forget('theme_m');
 
 			redirect('admin/addons/themes/options/'.$slug);
 		}
@@ -125,7 +124,7 @@ class Admin_themes extends Admin_Controller
 				// Success...
 				$this->session->set_flashdata('success', lang('addons:themes:save_success'));
 
-				$this->cache->clear('theme_m');
+				$this->cache->forget('theme_m');
 
 				redirect('admin/addons/themes/options/'.$slug);
 			}

@@ -12,6 +12,15 @@
 class Fields_m extends CI_Model
 {
 	public $table;
+	
+	// --------------------------------------------------------------------------
+
+	/**
+	 * Runtime cache for get_all_fields($namespace = false)
+	 *
+	 * @var    array
+	 */
+	public $get_all_fields_cache = array();
 
 	/**
 	 * Fields Validation
@@ -83,23 +92,35 @@ class Fields_m extends CI_Model
      * @param	int offset
      * @return array
      */
-    public function get_all_fields($namespace = false)
-	{
-		// Limit to namespace
-		if ($namespace) $this->db->where('field_namespace', $namespace);
+    public function get_all_fields($namespace = false) {
 
-		$obj = $this->db->order_by('field_name', 'asc')->get($this->table);
+		// Check runtime cache
+		if (! isset($this->get_all_fields_cache[$namespace])) {
 
-		$fields = $obj->result_array();
+			// Limit to namespace
+			if ($namespace) $this->db->where('field_namespace', $namespace);
+			
+			$obj = $this->db->order_by('field_name', 'DESC')->get($this->table);
+			
+			$fields = $obj->result_array();
+			
+			$return_fields = array();
 
-		$return_fields = array();
+			foreach($fields as $key => $field) {
 
-		foreach ($fields as $key => $field) {
-			$return_fields[$field['field_slug']] = $field;
- 			$return_fields[$field['field_slug']]['field_data'] = unserialize($field['field_data']);
+				$return_fields[$field['field_slug']] = $field;
+	 			$return_fields[$field['field_slug']]['field_data'] = unserialize($field['field_data']);
+			}
+
+			$this->get_all_fields_cache[$namespace] = $return_fields;
+
+		} else {
+
+			$return_fields = $this->get_all_fields_cache[$namespace];
+
 		}
 
-    	return $return_fields;
+		return $return_fields;
 	}
 
     /**
@@ -161,105 +182,6 @@ class Fields_m extends CI_Model
 		}
 
 		return $this->pdb->table($this->table)->insertGetId($insert_data);
-	}
-
-	// --------------------------------------------------------------------------
-
-	/**
-	 * Take field data and parse it into an array
-	 * the the DB forge class can use
-	 *
-	 * @param	obj
-	 * @param	array
-	 * @param	string
-	 * @return	array
-	 */
-	public function field_data_to_col_data($type, $field_data, $method = 'add')
-	{
-		$col_data = array();
-
-		// -------------------------------------
-		// Name
-		// -------------------------------------
-
-		if ($method == 'edit') {
-			$col_data['name'] 			= $field_data['field_slug'];
-		}
-
-		// -------------------------------------
-		// Col Type
-		// -------------------------------------
-
-		$col_data['type'] 				= strtoupper($type->db_col_type);
-
-		// -------------------------------------
-		// Constraint
-		// -------------------------------------
-
-		// First we check and see if a constraint has been added
-		if (isset($type->col_constraint) and $type->col_constraint) {
-			$col_data['constraint']		= $type->col_constraint;
-		}
-		// Otherwise, we'll check for a max_length field
-		elseif (isset($field_data['max_length']) and is_numeric($field_data['max_length'])) {
-			$col_data['constraint']		= $field_data['max_length'];
-		}
-
-		// -------------------------------------
-		// Text field varchar change
-		// -------------------------------------
-
-		if ($type->field_type_slug == 'text') {
-			if (isset($col_data['constraint']) and $col_data['constraint'] > 255) {
-				$col_data['type'] 				= 'TEXT';
-
-				// Don't need a constraint no more
-				unset($col_data['constraint']);
-			} else {
-				$col_data['type'] 				= 'VARCHAR';
-			}
-		}
-
-		// -------------------------------------
-		// Default
-		// -------------------------------------
-
-		if (isset($field_data['default_value']) and $field_data['default_value'] != '') {
-			$col_data['default']		= $field_data['default_value'];
-		}
-
-		// -------------------------------------
-		// Remove Default for some col types:
-		// -------------------------------------
-		// * TEXT
-		// * LONGTEXT
-		// -------------------------------------
-
-		$no_default = array('TEXT', 'LONGTEXT');
-
-		if (in_array($col_data['type'], $no_default)) {
-			unset($col_data['default']);
-		}
-
-		// -------------------------------------
-		// Default to allow null
-		// -------------------------------------
-
-		$col_data['null'] = true;
-
-		// -------------------------------------
-		// Check for varchar with no constraint
-		// -------------------------------------
-		// Catch it and default to 255
-		// -------------------------------------
-
-		if ($col_data['type'] == 'VARCHAR' and ( ! isset($col_data['constraint']) || !is_numeric($col_data['constraint']) || $col_data['constraint'] == '')) {
-			$col_data['constraint'] = 255;
-		}
-
-		// -------------------------------------
-
-		return $col_data;
 	}
 
 	// --------------------------------------------------------------------------

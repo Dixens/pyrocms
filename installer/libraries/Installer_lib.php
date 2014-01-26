@@ -1,6 +1,7 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed');
 
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Pyro\Cache\CacheManager;
 
 /**
  * @author  PyroCMS Dev Team
@@ -9,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 class Installer_lib
 {
 	/** @const string MIN_PHP_VERSION The minimum PHP version requirement */
-	const MIN_PHP_VERSION = '5.3.6';
+	const MIN_PHP_VERSION = '5.3.7';
 
 	/** @var string The GD extension version */
 	public $gd_version;
@@ -200,7 +201,7 @@ class Installer_lib
             	$config['database'] = $db["database"];
 				break;
 			case 'sqlite':
-				$config['location'] = $db['location'];
+				$config['database'] = $db['location'];
 				break;
 			default:
 				throw new InstallerException("Unknown database driver type: {$db['driver']}");
@@ -208,17 +209,17 @@ class Installer_lib
 		}
 
 		$capsule = new Capsule;
+        $capsule->addConnection($config);
 
-        $capsule->addConnection(array(
-			'driver' => $config['driver'],
-			'host' => $config['host'],
-			'database' => $config['database'],
-			'username' => $config['username'],
-			'prefix' => $config['prefix'],
-			'password' => $config['password'],
-			'charset' => $config['charset'],
-			'collation' => $config['collation'],
-        ));
+        $container = $capsule->getContainer();
+
+        $container->offsetGet('config')->offsetSet('cache.enable', false);
+        $container->offsetGet('config')->offsetSet('cache.driver', 'array');
+        $container->offsetGet('config')->offsetSet('cache.prefix', 'pyrocms');
+
+        ci()->cache = new CacheManager($container);
+
+        $capsule->setCacheManager(ci()->cache);
 
         // Set the fetch mode FETCH_CLASS so we 
         // get objects back by default.
@@ -257,9 +258,9 @@ class Installer_lib
 	public function write_db_file($db)
 	{
 		$replace = array(
-			'{driver}' => $db['driver'],
+			'{driver}'   => $db['driver'],
 			'{hostname}' => $db['hostname'],
-			'{port}' => $db['port'],
+			'{port}' 	 => $db['port'],
 			'{database}' => $db['database'],
 			'{username}' => $db['username'],
 			'{password}' => $db['password']

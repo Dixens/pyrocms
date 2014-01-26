@@ -1,6 +1,7 @@
 <?php namespace Pyro\Module\Comments\Model;
 
 use Settings;
+use Pyro\Model\Eloquent;
 
 /**
  * Comment model
@@ -8,7 +9,7 @@ use Settings;
  * @author      PyroCMS Dev Team
  * @package     PyroCMS\Core\Modules\Comments\Models
  */
-class Comment extends \Illuminate\Database\Eloquent\Model
+class Comment extends Eloquent
 {
     /**
      * Define the table name
@@ -16,6 +17,12 @@ class Comment extends \Illuminate\Database\Eloquent\Model
      * @var string
      */
     protected $table = 'comments';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable

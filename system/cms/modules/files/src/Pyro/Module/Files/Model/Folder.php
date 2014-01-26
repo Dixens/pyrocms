@@ -1,5 +1,7 @@
 <?php namespace Pyro\Module\Files\Model;
 
+use Pyro\Model\Eloquent;
+
 /**
  * Folder model
  *
@@ -7,7 +9,7 @@
  * @package  PyroCMS\Core\Modules\Keywords\Models
  * @link     http://docs.pyrocms.com/2.3/api/classes/Pyro.Module.Files.Model.Folder.html
  */
-class Folder extends \Illuminate\Database\Eloquent\Model
+class Folder extends Eloquent
 {
     /**
      * Define the table name
@@ -15,6 +17,12 @@ class Folder extends \Illuminate\Database\Eloquent\Model
      * @var string
      */
     protected $table = 'file_folders';
+
+    /**
+     * Cache minutes
+     * @var int
+     */
+    public $cacheMinutes = 30;
 
     /**
      * The attributes that aren't mass assignable
@@ -60,8 +68,19 @@ class Folder extends \Illuminate\Database\Eloquent\Model
     public static function findBySlugAndNotId($slug, $id)
     {
         return static::where('slug', '=', $slug)
-                        ->where('id','!=',$id)
-                        ->get();
+            ->where('id','!=',$id)
+            ->get();
+    }
+
+    /**
+     * Get a folder by slug and not id
+     *
+     * @param  int $parent_id The slug of the folder to retrieve
+     * @return object
+     */
+    public static function countByParentId($parent_id)
+    {
+        return static::where('parent_id', '=', $parent_id)->count();
     }
 
     /**
